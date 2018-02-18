@@ -4,8 +4,9 @@
   buses. It behaves like old good ethernet hub
   (https://en.wikipedia.org/wiki/Ethernet_hub)
 
-  Hub strategy is great for testing and environments with low traffic. There is
-  no setup needed, just plug and play!
+  Hub strategy is great for testing and environments with low traffic. Avoid
+  using it when your network contains cyrcles, otherwise your packets will be
+  floating in cyrcle forever. There is no setup needed, just plug and play!
 
 */
 
@@ -34,10 +35,10 @@ bool Hub::handle_packet_after_this_device(PJON<Any> **buses, uint8_t busCount, u
       packet_info.sender_bus_id,
       packet_info.receiver_id,
       packet_info.receiver_bus_id,
-      (const char*)payload,
+      (char *)payload,
       length,
-      packet_info.header,
-      0,
+      PJON_FAIL, //gioblu: why packet_info.header does not work here? Why it works here? https://github.com/gioblu/PJON/blob/master/examples/ARDUINO/Network/SoftwareBitBang/RecursiveAcknowledge/Router/Router.ino#L26
+      packet_info.id,
       packet_info.port
     );
   }
