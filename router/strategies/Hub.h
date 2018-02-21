@@ -19,6 +19,7 @@ public:
   bool handle_packet_before_this_device(
     PJON<Any> **buses,
     uint8_t busCount,
+    PJON<Any> * from_bus,
     uint16_t packet_id,
     uint8_t sender_id,
     const uint8_t * sender_bus_id,
@@ -32,6 +33,7 @@ public:
   bool handle_packet_after_this_device(
     PJON<Any> **buses,
     uint8_t busCount,
+    PJON<Any> * from_bus,
     uint16_t packet_id,
     uint8_t sender_id,
     const uint8_t * sender_bus_id,
@@ -50,6 +52,7 @@ private:
 bool Hub::handle_packet_before_this_device(
   PJON<Any> **buses,
   uint8_t busCount,
+  PJON<Any> * from_bus,
   uint16_t packet_id,
   uint8_t sender_id,
   const uint8_t * sender_bus_id,
@@ -67,6 +70,7 @@ bool Hub::handle_packet_before_this_device(
 bool Hub::handle_packet_after_this_device(
   PJON<Any> **buses,
   uint8_t busCount,
+  PJON<Any> * from_bus,
   uint16_t packet_id,
   uint8_t sender_id,
   const uint8_t * sender_bus_id,
@@ -78,17 +82,19 @@ bool Hub::handle_packet_after_this_device(
   uint16_t port
 ) {
   for(uint8_t i = 0; i < busCount; i++) {
-    buses[i]->send_from_id(
-      sender_id,
-      sender_bus_id,
-      receiver_id,
-      receiver_bus_id,
-      (char *)payload,
-      length,
-      header,
-      packet_id,
-      port
-    );
+    if(buses[i] != from_bus) {
+      buses[i]->send_from_id(
+        sender_id,
+        sender_bus_id,
+        receiver_id,
+        receiver_bus_id,
+        (char *)payload,
+        length,
+        header,
+        packet_id,
+        port
+      );
+    }
   }
 
   return true;

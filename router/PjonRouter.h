@@ -58,8 +58,10 @@ private:
   uint8_t _busCount = -1;
   PJON_Receiver _receiver;
   PJON_Error _error;
+  uint8_t _currently_receiving_bus = PJON_NOT_ASSIGNED;
   void *_custom_pointer = NULL;
   bool _handle_packet_for_this_device(
+    PJON<Any> * from_bus,
     uint16_t packet_id,
     uint8_t sender_id,
     const uint8_t * sender_bus_id,
@@ -113,8 +115,6 @@ void PjonRouter<Strategy>::set_buses(PJON<Any> ** buses, uint8_t busCount) {
 }
 
 // --- private methods ---
-// gioblu: I wanna support important bus methods here like begin, recieve, update, ... Make sense?
-// gioblu: Considering to inherit PjonRouter from PJON class to allow using set of buses the same way as one bus. For example to use Router in Router :-)
 template<class Strategy>
 void PjonRouter<Strategy>::begin() {
   for(uint8_t i = 0; i < _busCount; i++) {
@@ -156,10 +156,14 @@ uint16_t PjonRouter<Strategy>::update() {
 
 template<class Strategy>
 uint16_t PjonRouter<Strategy>::receive() {
+
   uint16_t total = 0;
   for(uint8_t i = 0; i < _busCount; i++) {
+    _currently_receiving_bus = i;
     total += _buses[i]->receive();
   }
+
+  _currently_receiving_bus = PJON_NOT_ASSIGNED;
 
   return total;
 }
@@ -196,16 +200,6 @@ uint16_t PjonRouter<Strategy>::send(
   uint16_t p_id,
   uint16_t requested_port
 ) {
-  // PJON_Packet_Info packet_info;
-  // packet_info.header = header;
-  // packet_info.id = p_id;
-  // packet_info.receiver_id = id;
-  // PJON<Any>::copy_bus_id(packet_info.receiver_bus_id, b_id);
-  // packet_info.sender_id = _buses[0]->device_id();
-  // PJON<Any>::copy_bus_id(packet_info.sender_bus_id, _buses[0]->bus_id);
-  // packet_info.port = requested_port;
-  // packet_info.custom_pointer = this;
-
   _route_packet(p_id, _buses[0]->device_id(), _buses[0]->bus_id, id, b_id, (uint8_t*)string, length, header, requested_port);
   return 0;
 };
@@ -222,28 +216,32 @@ void PjonRouter<Strategy>::_route_packet(
     uint16_t header,
     uint16_t port) {
 
-  bool handled = strategy.handle_packet_before_this_device(_buses, _busCount, packet_id, sender_id, sender_bus_id, receiver_id, receiver_bus_id, payload, length, header, port);
+  PJON<Any> * from_bus;
+  if(_currently_receiving_bus != PJON_NOT_ASSIGNED) {
+    from_bus = _buses[_currently_receiving_bus];
+  } else {
+    from_bus = NULL;
+  }
+
+  bool handled = strategy.handle_packet_before_this_device(_buses, _busCount, from_bus, packet_id, sender_id, sender_bus_id, receiver_id, receiver_bus_id, payload, length, header, port);
 
   if(!handled) {
-    handled = _handle_packet_for_this_device(packet_id, sender_id, sender_bus_id, receiver_id, receiver_bus_id, payload, length, header, port);
+    handled = _handle_packet_for_this_device(from_bus, packet_id, sender_id, sender_bus_id, receiver_id, receiver_bus_id, payload, length, header, port);
   }
 
   if(!handled) {
-    handled = strategy.handle_packet_after_this_device(_buses, _busCount, packet_id, sender_id, sender_bus_id, receiver_id, receiver_bus_id, payload, length, header, port);
+    handled = strategy.handle_packet_after_this_device(_buses, _busCount, from_bus, packet_id, sender_id, sender_bus_id, receiver_id, receiver_bus_id, payload, length, header, port);
   }
 
-  if(handled) {
-    // TODO avoid sending ack to all buses!
-    // TODO avoid sending ack when routing packet send from this device
-    for(uint8_t i = 0; i < _busCount; i++) {
-      _buses[i]->send_synchronous_acknowledge();
-    }
+  if(handled && from_bus != NULL) {
+    from_bus->send_synchronous_acknowledge();
   }
 
 }
 
 template<class Strategy>
 bool PjonRouter<Strategy>::_handle_packet_for_this_device(
+  PJON<Any> * from_bus,
   uint16_t packet_id,
   uint8_t sender_id,
   const uint8_t * sender_bus_id,
