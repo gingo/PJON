@@ -16,30 +16,78 @@
 
 class Hub {
 public:
-  bool handle_packet_before_this_device(PJON<Any> **buses, uint8_t busCount, uint8_t * payload, uint16_t length, const PJON_Packet_Info &packet_info);
-  bool handle_packet_after_this_device(PJON<Any> **buses, uint8_t busCount, uint8_t * payload, uint16_t length, const PJON_Packet_Info &packet_info);
+  bool handle_packet_before_this_device(
+    PJON<Any> **buses,
+    uint8_t busCount,
+    uint16_t packet_id,
+    uint8_t sender_id,
+    const uint8_t * sender_bus_id,
+    uint8_t receiver_id,
+    const uint8_t * receiver_bus_id,
+    uint8_t * payload,
+    uint16_t length,
+    uint16_t header,
+    uint16_t port
+  );
+  bool handle_packet_after_this_device(
+    PJON<Any> **buses,
+    uint8_t busCount,
+    uint16_t packet_id,
+    uint8_t sender_id,
+    const uint8_t * sender_bus_id,
+    uint8_t receiver_id,
+    const uint8_t * receiver_bus_id,
+    uint8_t * payload,
+    uint16_t length,
+    uint16_t header,
+    uint16_t port
+  );
 
 private:
 
 };
 
-bool Hub::handle_packet_before_this_device(PJON<Any> **buses, uint8_t busCount, uint8_t * payload, uint16_t length, const PJON_Packet_Info &packet_info) {
+bool Hub::handle_packet_before_this_device(
+  PJON<Any> **buses,
+  uint8_t busCount,
+  uint16_t packet_id,
+  uint8_t sender_id,
+  const uint8_t * sender_bus_id,
+  uint8_t receiver_id,
+  const uint8_t * receiver_bus_id,
+  uint8_t * payload,
+  uint16_t length,
+  uint16_t header,
+  uint16_t port
+) {
   // nothing here, we care only for packets for other devices
   return false;
 };
 
-bool Hub::handle_packet_after_this_device(PJON<Any> **buses, uint8_t busCount, uint8_t * payload, uint16_t length, const PJON_Packet_Info &packet_info) {
+bool Hub::handle_packet_after_this_device(
+  PJON<Any> **buses,
+  uint8_t busCount,
+  uint16_t packet_id,
+  uint8_t sender_id,
+  const uint8_t * sender_bus_id,
+  uint8_t receiver_id,
+  const uint8_t * receiver_bus_id,
+  uint8_t * payload,
+  uint16_t length,
+  uint16_t header,
+  uint16_t port
+) {
   for(uint8_t i = 0; i < busCount; i++) {
     buses[i]->send_from_id(
-      packet_info.sender_id,
-      packet_info.sender_bus_id,
-      packet_info.receiver_id,
-      packet_info.receiver_bus_id,
+      sender_id,
+      sender_bus_id,
+      receiver_id,
+      receiver_bus_id,
       (char *)payload,
       length,
-      PJON_FAIL, //gioblu: why packet_info.header does not work here? Why it works here? https://github.com/gioblu/PJON/blob/master/examples/ARDUINO/Network/SoftwareBitBang/RecursiveAcknowledge/Router/Router.ino#L26
-      packet_info.id,
-      packet_info.port
+      header,
+      packet_id,
+      port
     );
   }
 

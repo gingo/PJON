@@ -41,7 +41,17 @@ public:
 
   // TODO implement more PJON methods
 
-  void _route_packet(uint8_t * payload, uint16_t length, const PJON_Packet_Info &packet_info);
+  void _route_packet(
+    uint16_t packet_id,
+    uint8_t sender_id,
+    const uint8_t * sender_bus_id,
+    uint8_t receiver_id,
+    const uint8_t * receiver_bus_id,
+    uint8_t * payload,
+    uint16_t length,
+    uint16_t header,
+    uint16_t port
+  );
 
 private:
   PJON<Any> **_buses = NULL;
@@ -49,12 +59,32 @@ private:
   PJON_Receiver _receiver;
   PJON_Error _error;
   void *_custom_pointer = NULL;
-  bool _handle_packet_for_this_device(uint8_t * payload, uint16_t length, const PJON_Packet_Info &packet_info);
+  bool _handle_packet_for_this_device(
+    uint16_t packet_id,
+    uint8_t sender_id,
+    const uint8_t * sender_bus_id,
+    uint8_t receiver_id,
+    const uint8_t * receiver_bus_id,
+    uint8_t * payload,
+    uint16_t length,
+    uint16_t header,
+    uint16_t port
+  );
 };
 
 template<class Strategy>
 void pjon_router_receiver_handler(uint8_t * payload, uint16_t length, const PJON_Packet_Info &packet_info) {
-  ((PjonRouter<Strategy>*)packet_info.custom_pointer)->_route_packet(payload, length, packet_info);
+  ((PjonRouter<Strategy>*)packet_info.custom_pointer)->_route_packet(
+    packet_info.id,
+    packet_info.sender_id,
+    packet_info.sender_bus_id,
+    packet_info.receiver_id,
+    packet_info.receiver_bus_id,
+    payload,
+    length,
+    packet_info.header,
+    packet_info.port
+  );
 };
 
 // --- public methods ---
@@ -134,7 +164,6 @@ uint16_t PjonRouter<Strategy>::receive() {
   return total;
 }
 
-
 template<class Strategy>
 uint16_t PjonRouter<Strategy>::receive(uint32_t duration) {
   // gioblu: I'm not sure how to implement this method correctly.
@@ -167,31 +196,40 @@ uint16_t PjonRouter<Strategy>::send(
   uint16_t p_id,
   uint16_t requested_port
 ) {
-  PJON_Packet_Info packet_info;
-  packet_info.header = header;
-  packet_info.id = p_id;
-  packet_info.receiver_id = id;
-  PJON<Any>::copy_bus_id(packet_info.receiver_bus_id, b_id);
-  packet_info.sender_id = _buses[0]->device_id();
-  PJON<Any>::copy_bus_id(packet_info.sender_bus_id, _buses[0]->bus_id);
-  packet_info.port = requested_port;
-  packet_info.custom_pointer = this;
+  // PJON_Packet_Info packet_info;
+  // packet_info.header = header;
+  // packet_info.id = p_id;
+  // packet_info.receiver_id = id;
+  // PJON<Any>::copy_bus_id(packet_info.receiver_bus_id, b_id);
+  // packet_info.sender_id = _buses[0]->device_id();
+  // PJON<Any>::copy_bus_id(packet_info.sender_bus_id, _buses[0]->bus_id);
+  // packet_info.port = requested_port;
+  // packet_info.custom_pointer = this;
 
-  _route_packet((uint8_t*)string, length, packet_info);
+  _route_packet(p_id, _buses[0]->device_id(), _buses[0]->bus_id, id, b_id, (uint8_t*)string, length, header, requested_port);
   return 0;
 };
 
 template<class Strategy>
-void PjonRouter<Strategy>::_route_packet(uint8_t * payload, uint16_t length, const PJON_Packet_Info &packet_info) {
+void PjonRouter<Strategy>::_route_packet(
+    uint16_t packet_id,
+    uint8_t sender_id,
+    const uint8_t * sender_bus_id,
+    uint8_t receiver_id,
+    const uint8_t * receiver_bus_id,
+    uint8_t * payload,
+    uint16_t length,
+    uint16_t header,
+    uint16_t port) {
 
-  bool handled = strategy.handle_packet_before_this_device(_buses, _busCount, payload, length, packet_info);
+  bool handled = strategy.handle_packet_before_this_device(_buses, _busCount, packet_id, sender_id, sender_bus_id, receiver_id, receiver_bus_id, payload, length, header, port);
 
   if(!handled) {
-    handled = _handle_packet_for_this_device(payload, length, packet_info);
+    handled = _handle_packet_for_this_device(packet_id, sender_id, sender_bus_id, receiver_id, receiver_bus_id, payload, length, header, port);
   }
 
   if(!handled) {
-    handled = strategy.handle_packet_after_this_device(_buses, _busCount, payload, length, packet_info);
+    handled = strategy.handle_packet_after_this_device(_buses, _busCount, packet_id, sender_id, sender_bus_id, receiver_id, receiver_bus_id, payload, length, header, port);
   }
 
   if(handled) {
@@ -205,19 +243,35 @@ void PjonRouter<Strategy>::_route_packet(uint8_t * payload, uint16_t length, con
 }
 
 template<class Strategy>
-bool PjonRouter<Strategy>::_handle_packet_for_this_device(uint8_t * payload, uint16_t length, const PJON_Packet_Info &packet_info) {
+bool PjonRouter<Strategy>::_handle_packet_for_this_device(
+  uint16_t packet_id,
+  uint8_t sender_id,
+  const uint8_t * sender_bus_id,
+  uint8_t receiver_id,
+  const uint8_t * receiver_bus_id,
+  uint8_t * payload,
+  uint16_t length,
+  uint16_t header,
+  uint16_t port) {
 
   for(uint8_t i = 0; i < _busCount; i++) {
-    if(PJON<Any>::bus_id_equality(_buses[i]->bus_id, packet_info.receiver_bus_id) &&
-        _buses[i]->device_id() == packet_info.receiver_id) {
+    if(PJON<Any>::bus_id_equality(_buses[i]->bus_id, receiver_bus_id) &&
+        _buses[i]->device_id() == receiver_id) {
 
-      PJON_Packet_Info packet_info_changed = packet_info;
-      packet_info_changed.custom_pointer = _custom_pointer;
+      PJON_Packet_Info packet_info;
+      packet_info.id = packet_id;
+      packet_info.receiver_id = receiver_id;
+      PJON<Any>::copy_bus_id(packet_info.receiver_bus_id, receiver_bus_id);
+      packet_info.sender_id = sender_id;
+      PJON<Any>::copy_bus_id(packet_info.sender_bus_id, sender_bus_id);
+      packet_info.header = header;
+      packet_info.port = port;
+      packet_info.custom_pointer = _custom_pointer;
 
       _receiver(
         payload,
         length,
-        packet_info_changed
+        packet_info
       );
 
       return true;
